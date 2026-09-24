@@ -1,0 +1,243 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  FRONT_DESK
+  TECHNICIAN
+}
+
+enum WorkOrderStatus {
+  INTAKE
+  IN_PROGRESS
+  WAITING_ON_PARTS
+  COMPLETED
+  INVOICED
+  CLOSED
+}
+
+enum StockMovementType {
+  RECEIVED
+  USED_ON_WORK_ORDER
+  SOLD_DIRECT
+  ADJUSTED
+}
+
+enum QuotationStatus {
+  PENDING
+  CONVERTED
+}
+
+model User {
+  id           Int      @id @default(autoincrement())
+  username     String   @unique
+  passwordHash String
+  role         Role
+  displayName  String
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  stockMovements StockMovement[]
+}
+
+model ShopSettings {
+  id           Int      @id @default(autoincrement())
+  businessName String
+  logoPath     String?
+  addressLine1 String?
+  addressLine2 String?
+  city         String?
+  state        String?
+  zip          String?
+  phone        String?
+  email        String?
+  taxId        String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model Customer {
+  id          Int      @id @default(autoincrement())
+  firstName   String
+  lastName    String
+  companyName String?
+  phone       String
+  email       String?
+  address     String?
+  notes       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  vehicleLinks VehicleOwner[]
+  workOrders   WorkOrder[]
+}
+
+model Vehicle {
+  id        Int      @id @default(autoincrement())
+  vin       String?
+  make      String
+  model     String
+  year      Int?
+  plate     String?
+  color     String?
+  mileage   Int?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  ownerLinks VehicleOwner[]
+  workOrders WorkOrder[]
+}
+
+model VehicleOwner {
+  id         Int     @id @default(autoincrement())
+  vehicleId  Int
+  customerId Int
+  isPrimary  Boolean @default(false)
+
+  vehicle  Vehicle  @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@unique([vehicleId, customerId])
+}
+
+model WorkOrder {
+  id          Int             @id @default(autoincrement())
+  vehicleId   Int
+  customerId  Int
+  status      WorkOrderStatus @default(INTAKE)
+  dateOpened  DateTime        @default(now())
+  dateClosed  DateTime?
+  description String
+  mileageIn   Int?
+  mileageOut  Int?
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  vehicle    Vehicle              @relation(fields: [vehicleId], references: [id])
+  customer   Customer             @relation(fields: [customerId], references: [id])
+  laborItems WorkOrderLaborItem[]
+  partItems  WorkOrderPartItem[]
+  stockMovements StockMovement[]
+  quotationSource Quotation?
+}
+
+model Laborer {
+  id        Int      @id @default(autoincrement())
+  name      String
+  phone     String?
+  role      String
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  laborItems WorkOrderLaborItem[]
+}
+
+model WorkOrderLaborItem {
+  id          Int    @id @default(autoincrement())
+  workOrderId Int
+  laborerId   Int
+  description String
+  amountCents Int
+  totalCents  Int
+  sortOrder   Int    @default(0)
+
+  workOrder WorkOrder @relation(fields: [workOrderId], references: [id], onDelete: Cascade)
+  laborer   Laborer   @relation(fields: [laborerId], references: [id])
+}
+
+model Quotation {
+  id                 Int             @id @default(autoincrement())
+  clientName         String
+  clientContact      String?
+  vehicleDescription String
+  requestDescription String
+  notes              String?
+  status             QuotationStatus @default(PENDING)
+  convertedWorkOrderId Int?          @unique
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
+
+  laborItems QuotationLaborItem[]
+  partItems  QuotationPartItem[]
+  convertedWorkOrder WorkOrder? @relation(fields: [convertedWorkOrderId], references: [id])
+}
+
+model QuotationLaborItem {
+  id          Int    @id @default(autoincrement())
+  quotationId Int
+  description String
+  amountCents Int
+  sortOrder   Int    @default(0)
+
+  quotation Quotation @relation(fields: [quotationId], references: [id], onDelete: Cascade)
+}
+
+model QuotationPartItem {
+  id                  Int    @id @default(autoincrement())
+  quotationId         Int
+  description         String
+  quantity             Int
+  estimatedPriceCents Int
+  totalCents          Int
+  sortOrder           Int    @default(0)
+
+  quotation Quotation @relation(fields: [quotationId], references: [id], onDelete: Cascade)
+}
+
+model WorkOrderPartItem {
+  id              Int    @id @default(autoincrement())
+  workOrderId     Int
+  inventoryItemId Int
+  description     String
+  quantity        Int
+  unitCostCents   Int
+  unitPriceCents  Int
+  totalCents      Int
+  sortOrder       Int    @default(0)
+
+  workOrder     WorkOrder     @relation(fields: [workOrderId], references: [id], onDelete: Cascade)
+  inventoryItem InventoryItem @relation(fields: [inventoryItemId], references: [id])
+}
+
+model InventoryItem {
+  id               Int      @id @default(autoincrement())
+  sku              String   @unique
+  name             String
+  category         String?
+  costPriceCents   Int
+  sellPriceCents   Int
+  quantityOnHand   Int      @default(0)
+  reorderThreshold Int      @default(0)
+  active           Boolean  @default(true)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  partItems      WorkOrderPartItem[]
+  stockMovements StockMovement[]
+}
+
+model StockMovement {
+  id                Int               @id @default(autoincrement())
+  inventoryItemId   Int
+  type              StockMovementType
+  quantityChange    Int
+  relatedWorkOrderId Int?
+  note              String?
+  createdByUserId   Int?
+  createdAt         DateTime          @default(now())
+
+  inventoryItem   InventoryItem @relation(fields: [inventoryItemId], references: [id])
+  relatedWorkOrder WorkOrder?   @relation(fields: [relatedWorkOrderId], references: [id])
+  createdByUser    User?        @relation(fields: [createdByUserId], references: [id])
+}
