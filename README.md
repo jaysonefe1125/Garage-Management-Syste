@@ -185,3 +185,4 @@ public/fonts/           self-hosted fonts (Oswald, IBM Plex) — bundled, no run
 
 Login roles: `ADMIN`, `FRONT_DESK`, `TECHNICIAN` — a few destructive actions (deleting
 customers, deactivating a laborer, editing shop settings) are Admin-only.
+# Garage-Management-Syste
